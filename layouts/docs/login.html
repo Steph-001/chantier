@@ -1,0 +1,372 @@
+{{ define "main" }}
+<div class="td-content">
+    <h1>Login</h1>
+    
+    <div class="login-container">
+      <div id="auth-status" style="margin-bottom: 20px; text-align: center;">
+        <p id="auth-message">Please log in to sync your progress</p>
+      </div>
+      
+      <div id="auth-forms">
+        <div id="login-form">
+          <h3>Login</h3>
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" class="form-control" placeholder="your@email.com">
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" class="form-control">
+          </div>
+          <div class="form-actions">
+            <button id="login-submit" class="btn btn-primary">Login</button>
+            <button id="show-signup" class="btn btn-link">Need an account? Sign up</button>
+          </div>
+        </div>
+        
+        <div id="signup-form" style="display: none;">
+          <h3>Sign Up</h3>
+          <div class="form-group">
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" class="form-control" placeholder="your@email.com">
+          </div>
+          <div class="form-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" class="form-control">
+          </div>
+          <div class="form-actions">
+            <button id="signup-submit" class="btn btn-primary">Sign Up</button>
+            <button id="show-login" class="btn btn-link">Already have an account? Login</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {{ .Content }}
+</div>
+
+<style>
+.login-container {
+  max-width: 400px;
+  margin: 40px auto;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.form-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-link {
+  background: none;
+  color: #007bff;
+  border: none;
+  padding: 0;
+}
+
+.btn:hover {
+  opacity: 0.8;
+}
+</style>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+// Wait for DOM and Supabase to be ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Check if supabase is loaded
+  if (typeof supabase === 'undefined') {
+    console.error('Supabase library not loaded');
+    document.getElementById('auth-message').textContent = 'Error: Authentication service not available';
+    return;
+  }
+
+  // Initialize Supabase client
+  const { createClient } = supabase;
+  const supabaseClient = createClient(
+    'https://qoihzqlsoangwhkepuen.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvaWh6cWxzb2FuZ3doa2VwdWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2NDA3MzUsImV4cCI6MjA2NDIxNjczNX0.uSH3zHSZ1QFrmVAq8erWGeOXyUk5zmDBcHhFddS--BA'
+  );
+
+  console.log("Supabase client initialized:", supabaseClient);
+
+  // DOM elements
+  const authMessage = document.getElementById('auth-message');
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  const loginEmail = document.getElementById('login-email');
+  const loginPassword = document.getElementById('login-password');
+  const signupEmail = document.getElementById('signup-email');
+  const signupPassword = document.getElementById('signup-password');
+  const loginSubmit = document.getElementById('login-submit');
+  const signupSubmit = document.getElementById('signup-submit');
+  const showSignup = document.getElementById('show-signup');
+  const showLogin = document.getElementById('show-login');
+  
+  // Show signup form
+  showSignup.addEventListener('click', function(e) {
+    e.preventDefault();
+    loginForm.style.display = 'none';
+    signupForm.style.display = 'block';
+  });
+  
+  // Show login form
+  showLogin.addEventListener('click', function(e) {
+    e.preventDefault();
+    signupForm.style.display = 'none';
+    loginForm.style.display = 'block';
+  });
+  
+  // Handle login
+  loginSubmit.addEventListener('click', async function(e) {
+    e.preventDefault();
+    
+    const email = loginEmail.value.trim();
+    const password = loginPassword.value;
+    
+    if (!email || !password) {
+      authMessage.textContent = 'Please enter both email and password';
+      authMessage.style.color = 'red';
+      return;
+    }
+    
+    try {
+      authMessage.textContent = 'Logging in...';
+      authMessage.style.color = 'blue';
+      
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
+      
+      if (error) {
+        console.error('Login error:', error);
+        authMessage.textContent = `Login failed: ${error.message}`;
+        authMessage.style.color = 'red';
+        return;
+      }
+      
+      console.log('Login successful:', data);
+      authMessage.textContent = 'Login successful! Redirecting...';
+      authMessage.style.color = 'green';
+      
+      // Redirect back to previous page or home
+      setTimeout(() => {
+        const redirectUrl = document.referrer || '/';
+        window.location.href = redirectUrl;
+      }, 1500);
+      
+    } catch (err) {
+      console.error('Login exception:', err);
+      authMessage.textContent = 'Login failed. Please try again.';
+      authMessage.style.color = 'red';
+    }
+  });
+  
+  // Handle signup
+  signupSubmit.addEventListener('click', async function(e) {
+    e.preventDefault();
+    
+    const email = signupEmail.value.trim();
+    const password = signupPassword.value;
+    
+    if (!email || !password) {
+      authMessage.textContent = 'Please enter both email and password';
+      authMessage.style.color = 'red';
+      return;
+    }
+    
+    if (password.length < 6) {
+      authMessage.textContent = 'Password must be at least 6 characters';
+      authMessage.style.color = 'red';
+      return;
+    }
+    
+    try {
+      authMessage.textContent = 'Creating account...';
+      authMessage.style.color = 'blue';
+      
+      const { data, error } = await supabaseClient.auth.signUp({
+        email: email,
+        password: password
+      });
+      
+      if (error) {
+        console.error('Signup error:', error);
+        authMessage.textContent = `Signup failed: ${error.message}`;
+        authMessage.style.color = 'red';
+        return;
+      }
+      
+      console.log('Signup successful:', data);
+      
+      if (data.user && data.session) {
+        // Auto-login after signup (email confirmation disabled)
+        authMessage.textContent = 'Account created! Redirecting...';
+        authMessage.style.color = 'green';
+        
+        setTimeout(() => {
+          const redirectUrl = document.referrer || '/';
+          window.location.href = redirectUrl;
+        }, 1500);
+      } else {
+        // Email confirmation required
+        authMessage.textContent = 'Signup successful! Please check your email for confirmation.';
+        authMessage.style.color = 'green';
+      }
+      
+    } catch (err) {
+      console.error('Signup exception:', err);
+      authMessage.textContent = 'Signup failed. Please try again.';
+      authMessage.style.color = 'red';
+    }
+  });
+  
+  // Check if already logged in
+  async function checkAuth() {
+    try {
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      
+      if (error) {
+        console.error('Auth check error:', error);
+        return;
+      }
+      
+      console.log('Current session:', session); // Debug log
+      
+      if (session && session.user) {
+        showLoggedInState(session.user);
+      } else {
+        showLoggedOutState();
+      }
+    } catch (err) {
+      console.error('Auth check exception:', err);
+    }
+  }
+  
+  // Show logged in state
+  function showLoggedInState(user) {
+    // Clear any existing content in auth-status
+    const authStatus = document.getElementById('auth-status');
+    authStatus.innerHTML = '';
+    
+    // Create logged in message
+    const welcomeMsg = document.createElement('p');
+    welcomeMsg.textContent = `Welcome back, ${user.email}!`;
+    welcomeMsg.style.color = 'green';
+    welcomeMsg.style.fontSize = '18px';
+    welcomeMsg.style.fontWeight = 'bold';
+    
+    // Create logout button
+    const logoutBtn = document.createElement('button');
+    logoutBtn.textContent = 'Logout';
+    logoutBtn.className = 'btn btn-primary';
+    logoutBtn.style.marginTop = '10px';
+    logoutBtn.onclick = async function() {
+      console.log('Logging out...');
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) {
+        console.error('Logout error:', error);
+      } else {
+        console.log('Logged out successfully');
+        window.location.reload();
+      }
+    };
+    
+    // Create continue button
+    const continueBtn = document.createElement('button');
+    continueBtn.textContent = 'Continue to Site';
+    continueBtn.className = 'btn btn-primary';
+    continueBtn.style.marginTop = '10px';
+    continueBtn.style.marginLeft = '10px';
+    continueBtn.onclick = function() {
+      window.location.href = '/';
+    };
+    
+    // Add elements to auth status
+    authStatus.appendChild(welcomeMsg);
+    const buttonContainer = document.createElement('div');
+    buttonContainer.appendChild(logoutBtn);
+    buttonContainer.appendChild(continueBtn);
+    authStatus.appendChild(buttonContainer);
+    
+    // Hide login/signup forms
+    document.getElementById('auth-forms').style.display = 'none';
+    
+    console.log('Showing logged in state for:', user.email);
+  }
+  
+  // Show logged out state
+  function showLoggedOutState() {
+    authMessage.textContent = 'Please log in to sync your progress';
+    authMessage.style.color = 'black';
+    document.getElementById('auth-forms').style.display = 'block';
+    console.log('Showing logged out state');
+  }
+  
+  // Check auth status
+  checkAuth();
+  
+  // Listen for auth state changes
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    console.log('Auth state changed:', event, session);
+    if (event === 'SIGNED_IN' && session) {
+      console.log('User signed in');
+      showLoggedInState(session.user);
+    } else if (event === 'SIGNED_OUT') {
+      console.log('User signed out');
+      showLoggedOutState();
+    }
+  });
+});
+</script>
+{{ end }}
+
+{{ define "styles" }}
+<!-- Add custom styles here if needed -->
+{{ end }}
+
+{{ define "toc" }}{{/* Leave empty */}}{{ end }}
+{{ define "previous_next_buttons" }}{{/* Leave empty */}}{{ end }}
+{{ define "edit_page_button" }}{{/* Leave empty */}}{{ end }}
+{{ define "page_contribution_button" }}{{/* Leave empty */}}{{ end }}
+{{ define "print_page_button" }}{{/* Leave empty */}}{{ end }}
+{{ define "fork_page_button" }}{{/* Leave empty */}}{{ end }}

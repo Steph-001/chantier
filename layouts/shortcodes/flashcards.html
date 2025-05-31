@@ -1,9 +1,16 @@
-<!-- layouts/shortcards/flashcards.html -->
+<!-- layouts/shortcards/flashcards.html healthy -->
 {{ $indexPage := .Page.Parent }}
 {{ if not $indexPage }}
   {{ $indexPage = .Page.Site.GetPage (.Page.Dir | strings.TrimSuffix "/") }}
 {{ end }}
 {{ if $indexPage.Params.lexicon }}
+
+
+<div class="login-link-container" style="text-align: right; margin-bottom: 0.5rem;">
+    <a href="/login/" class="login-link" style="color: #007bff; text-decoration: none; font-size: 0.9rem;">Login / Logout</a>
+</div>
+
+
 
 <div class="flashcards-container">
     <div class="flashcards-header">
@@ -495,6 +502,8 @@
 </style>
 
 <script>
+
+
 (function() {
     // Flashcard data from Hugo
     const flashcards = [
