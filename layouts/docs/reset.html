@@ -1,7 +1,6 @@
 {{ define "main" }}
 <style>
-        
-        .container {
+        .reset-container {
             background: white;
             border-radius: 20px;
             padding: 40px;
@@ -13,37 +12,37 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
-        .logo {
+        .reset-container .logo {
             font-size: 3em;
             margin-bottom: 20px;
         }
         
-        h1 {
+        .reset-container h1 {
             color: #2d3748;
             margin-bottom: 10px;
             font-size: 2em;
         }
         
-        .subtitle {
+        .reset-container .subtitle {
             color: #718096;
             margin-bottom: 30px;
             font-size: 1.1em;
             line-height: 1.5;
         }
         
-        .form-group {
+        .reset-container .form-group {
             margin-bottom: 20px;
             text-align: left;
         }
         
-        label {
+        .reset-container label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
             color: #2d3748;
         }
         
-        input[type="email"], input[type="password"] {
+        .reset-container input[type="email"], .reset-container input[type="password"] {
             width: 100%;
             padding: 15px;
             border: 2px solid #e2e8f0;
@@ -53,14 +52,14 @@
             background: #f7fafc;
         }
         
-        input[type="email"]:focus, input[type="password"]:focus {
+        .reset-container input[type="email"]:focus, .reset-container input[type="password"]:focus {
             outline: none;
             border-color: #4299e1;
             background: white;
             box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
         }
         
-        .password-requirements {
+        .reset-container .password-requirements {
             background: #f0f9ff;
             border: 1px solid #bae6fd;
             border-radius: 8px;
@@ -69,30 +68,30 @@
             text-align: left;
         }
         
-        .password-requirements h4 {
+        .reset-container .password-requirements h4 {
             color: #0369a1;
             margin-bottom: 8px;
         }
         
-        .password-requirements ul {
+        .reset-container .password-requirements ul {
             list-style: none;
             padding: 0;
         }
         
-        .password-requirements li {
+        .reset-container .password-requirements li {
             color: #0369a1;
             margin: 5px 0;
             padding-left: 20px;
             position: relative;
         }
         
-        .password-requirements li:before {
+        .reset-container .password-requirements li:before {
             content: "•";
             position: absolute;
             left: 0;
         }
         
-        .btn {
+        .reset-container .btn {
             background: linear-gradient(135deg, #4299e1, #3182ce);
             color: white;
             border: none;
@@ -106,79 +105,79 @@
             margin: 10px 0;
         }
         
-        .btn:hover {
+        .reset-container .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.2);
         }
         
-        .btn:disabled {
+        .reset-container .btn:disabled {
             background: #a0aec0;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
         
-        .btn-secondary {
+        .reset-container .btn-secondary {
             background: #e2e8f0;
             color: #4a5568;
         }
         
-        .btn-secondary:hover {
+        .reset-container .btn-secondary:hover {
             background: #cbd5e0;
         }
         
-        .alert {
+        .reset-container .alert {
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
             font-weight: 500;
         }
         
-        .alert-success {
+        .reset-container .alert-success {
             background: #c6f6d5;
             border: 1px solid #9ae6b4;
             color: #22543d;
         }
         
-        .alert-error {
+        .reset-container .alert-error {
             background: #fed7d7;
             border: 1px solid #feb2b2;
             color: #742a2a;
         }
         
-        .alert-info {
+        .reset-container .alert-info {
             background: #bee3f8;
             border: 1px solid #90cdf4;
             color: #2c5282;
         }
         
-        .hidden {
+        .reset-container .hidden {
             display: none;
         }
         
-        .back-link {
+        .reset-container .back-link {
             margin-top: 20px;
             text-align: center;
         }
         
-        .back-link a {
+        .reset-container .back-link a {
             color: #4299e1;
             text-decoration: none;
             font-weight: 500;
         }
         
-        .back-link a:hover {
+        .reset-container .back-link a:hover {
             text-decoration: underline;
         }
         
-        .step-indicator {
+        .reset-container .step-indicator {
             display: flex;
             justify-content: center;
             margin-bottom: 30px;
             gap: 20px;
         }
         
-        .step {
+        .reset-container .step {
             width: 40px;
             height: 40px;
             border-radius: 50%;
@@ -190,18 +189,18 @@
             background: #cbd5e0;
         }
         
-        .step.active {
+        .reset-container .step.active {
             background: #4299e1;
         }
         
-        .step.completed {
+        .reset-container .step.completed {
             background: #48bb78;
         }
     </style>
 
 
 
-    <div class="container">
+    <div class="reset-container">
         <!-- Step 1: Request Password Reset -->
         <div id="requestSection">
             <div class="step-indicator">
