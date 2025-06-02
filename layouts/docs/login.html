@@ -22,6 +22,9 @@
             <button id="login-submit" class="btn btn-primary">Login</button>
             <button id="show-signup" class="btn btn-link">Need an account? Sign up</button>
           </div>
+          <div class="form-actions" style="margin-top: 10px; justify-content: center;">
+            <button id="forgot-password" class="btn btn-link">Forgot password?</button>
+          </div>
         </div>
         
         <div id="signup-form" style="display: none;">
@@ -37,6 +40,18 @@
           <div class="form-actions">
             <button id="signup-submit" class="btn btn-primary">Sign Up</button>
             <button id="show-login" class="btn btn-link">Already have an account? Login</button>
+          </div>
+        </div>
+        
+        <div id="forgot-password-form" style="display: none;">
+          <h3>Reset Password</h3>
+          <div class="form-group">
+            <label for="reset-email">Email</label>
+            <input type="email" id="reset-email" class="form-control" placeholder="your@email.com">
+          </div>
+          <div class="form-actions">
+            <button id="reset-submit" class="btn btn-primary">Send Reset Email</button>
+            <button id="back-to-login" class="btn btn-link">Back to login</button>
           </div>
         </div>
       </div>
@@ -140,6 +155,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const signupSubmit = document.getElementById('signup-submit');
   const showSignup = document.getElementById('show-signup');
   const showLogin = document.getElementById('show-login');
+  const forgotPassword = document.getElementById('forgot-password');
+  const forgotPasswordForm = document.getElementById('forgot-password-form');
+  const resetEmail = document.getElementById('reset-email');
+  const resetSubmit = document.getElementById('reset-submit');
+  const backToLogin = document.getElementById('back-to-login');
   
   // Show signup form
   showSignup.addEventListener('click', function(e) {
@@ -151,6 +171,23 @@ document.addEventListener('DOMContentLoaded', function() {
   // Show login form
   showLogin.addEventListener('click', function(e) {
     e.preventDefault();
+    signupForm.style.display = 'none';
+    forgotPasswordForm.style.display = 'none';
+    loginForm.style.display = 'block';
+  });
+  
+  // Show forgot password form
+  forgotPassword.addEventListener('click', function(e) {
+    e.preventDefault();
+    loginForm.style.display = 'none';
+    signupForm.style.display = 'none';
+    forgotPasswordForm.style.display = 'block';
+  });
+  
+  // Back to login from forgot password
+  backToLogin.addEventListener('click', function(e) {
+    e.preventDefault();
+    forgotPasswordForm.style.display = 'none';
     signupForm.style.display = 'none';
     loginForm.style.display = 'block';
   });
@@ -256,6 +293,52 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (err) {
       console.error('Signup exception:', err);
       authMessage.textContent = 'Signup failed. Please try again.';
+      authMessage.style.color = 'red';
+    }
+  });
+  
+  // Handle password reset
+  resetSubmit.addEventListener('click', async function(e) {
+    e.preventDefault();
+    
+    const email = resetEmail.value.trim();
+    
+    if (!email) {
+      authMessage.textContent = 'Please enter your email address';
+      authMessage.style.color = 'red';
+      return;
+    }
+    
+    try {
+      authMessage.textContent = 'Sending reset email...';
+      authMessage.style.color = 'blue';
+      
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/login/'
+      });
+      
+      if (error) {
+        console.error('Password reset error:', error);
+        authMessage.textContent = `Reset failed: ${error.message}`;
+        authMessage.style.color = 'red';
+        return;
+      }
+      
+      authMessage.textContent = 'Password reset email sent! Check your inbox.';
+      authMessage.style.color = 'green';
+      
+      // Clear the form and go back to login after a delay
+      setTimeout(() => {
+        resetEmail.value = '';
+        forgotPasswordForm.style.display = 'none';
+        loginForm.style.display = 'block';
+        authMessage.textContent = 'Please log in to sync your progress';
+        authMessage.style.color = 'black';
+      }, 3000);
+      
+    } catch (err) {
+      console.error('Password reset exception:', err);
+      authMessage.textContent = 'Reset failed. Please try again.';
       authMessage.style.color = 'red';
     }
   });
