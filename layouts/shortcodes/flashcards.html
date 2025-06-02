@@ -501,8 +501,41 @@
 }
 </style>
 
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
+// Initialize Supabase for auth status checking
+const { createClient } = supabase;
+const supabaseClient = createClient(
+    'https://qoihzqlsoangwhkepuen.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvaWh6cWxzb2FuZ3doa2VwdWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2NDA3MzUsImV4cCI6MjA2NDIxNjczNX0.uSH3zHSZ1QFrmVAq8erWGeOXyUk5zmDBcHhFddS--BA'
+);
 
+// Update auth link based on login status
+async function updateAuthLink() {
+    const authLink = document.getElementById('auth-link');
+    if (!authLink) return;
+    
+    try {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (session && session.user) {
+            authLink.textContent = 'Logout';
+            authLink.onclick = async function(e) {
+                e.preventDefault();
+                await supabaseClient.auth.signOut();
+                window.location.reload();
+            };
+        } else {
+            authLink.textContent = 'Login';
+            authLink.href = '/login/';
+            authLink.onclick = null;
+        }
+    } catch (err) {
+        console.error('Error checking auth status:', err);
+        authLink.textContent = 'Login';
+        authLink.href = '/login/';
+    }
+}
 
 (function() {
     // Flashcard data from Hugo
@@ -850,6 +883,14 @@
         document.getElementById('review-count').textContent = stats.medium + stats.hard;
     }, 1000);
 })();
+
+// Check auth status when page loads
+document.addEventListener('DOMContentLoaded', updateAuthLink);
+
+// Listen for auth state changes
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    updateAuthLink();
+});
 </script>
 {{ end }}
 

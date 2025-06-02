@@ -1,11 +1,10 @@
 ---
 title: ""
-linkTitle: "log"
+linkTitle: "reset"
+layout: reset
 type: docs
 toc_hide: True
 ---
 
 {{< spacer height="4rem" >}}
-{{< login >}}
-
-
+{{< password-reset >}}
