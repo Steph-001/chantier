@@ -563,8 +563,8 @@ async function updateAuthLink() {
         hard: 0
     };
     
-    // Storage key based on parent page
-    const storageKey = `flashcards_{{ $indexPage.RelPermalink }}`;
+    // Set ID based on parent page for database storage
+    const setId = `{{ $indexPage.RelPermalink }}`;
     
     // DOM elements
     const flashcard = document.getElementById('flashcard');
@@ -587,8 +587,55 @@ async function updateAuthLink() {
     const easyCount = document.getElementById('easy-count');
     const reviewCount = document.getElementById('review-count');
     
-    // Load progress from localStorage
-    function loadProgress() {
+    // Load progress from Supabase database
+    async function loadProgress() {
+        try {
+            const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+            
+            if (sessionError || !session?.user) {
+                // Not logged in, use localStorage as fallback
+                loadProgressFromLocalStorage();
+                return;
+            }
+            
+            const { data, error } = await supabaseClient
+                .from('flashcard_progress')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .eq('set_id', setId)
+                .single();
+            
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+                console.error('Error loading progress from database:', error);
+                loadProgressFromLocalStorage();
+                return;
+            }
+            
+            if (data) {
+                // Load from database
+                stats = data.stats || stats;
+                cardOrder = data.card_data?.cardOrder || cardOrder;
+                cardData = data.card_data?.cardData || {};
+                currentIndex = Math.min(data.card_data?.currentIndex || 0, cardOrder.length - 1);
+                studyMode = data.card_data?.studyMode || studyMode;
+                
+                // Set the radio button
+                const radio = document.querySelector(`input[value="${studyMode}"]`);
+                if (radio) radio.checked = true;
+            } else {
+                // No data in database, check localStorage for migration
+                loadProgressFromLocalStorage();
+            }
+        } catch (e) {
+            console.error("Error loading progress:", e);
+            loadProgressFromLocalStorage();
+        }
+        updateStatsDisplay();
+    }
+    
+    // Fallback function to load from localStorage
+    function loadProgressFromLocalStorage() {
+        const storageKey = `flashcards_{{ $indexPage.RelPermalink }}`;
         const saved = localStorage.getItem(storageKey);
         if (saved) {
             try {
@@ -603,14 +650,55 @@ async function updateAuthLink() {
                 const radio = document.querySelector(`input[value="${studyMode}"]`);
                 if (radio) radio.checked = true;
             } catch (e) {
-                console.error("Error loading progress:", e);
+                console.error("Error loading progress from localStorage:", e);
             }
         }
-        updateStatsDisplay();
     }
     
-    // Save progress to localStorage
-    function saveProgress() {
+    // Save progress to Supabase database
+    async function saveProgress() {
+        try {
+            const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+            
+            if (sessionError || !session?.user) {
+                // Not logged in, save to localStorage as fallback
+                saveProgressToLocalStorage();
+                return;
+            }
+            
+            const progressData = {
+                user_id: session.user.id,
+                set_id: setId,
+                card_data: {
+                    cardOrder,
+                    currentIndex,
+                    studyMode,
+                    cardData
+                },
+                stats: stats,
+                updated_at: new Date().toISOString()
+            };
+            
+            const { error } = await supabaseClient
+                .from('flashcard_progress')
+                .upsert(progressData, {
+                    onConflict: 'user_id,set_id'
+                });
+            
+            if (error) {
+                console.error('Error saving progress to database:', error);
+                // Fallback to localStorage
+                saveProgressToLocalStorage();
+            }
+        } catch (e) {
+            console.error("Error saving progress:", e);
+            saveProgressToLocalStorage();
+        }
+    }
+    
+    // Fallback function to save to localStorage
+    function saveProgressToLocalStorage() {
+        const storageKey = `flashcards_{{ $indexPage.RelPermalink }}`;
         const data = {
             stats,
             cardOrder,
@@ -873,8 +961,9 @@ async function updateAuthLink() {
     });
     
     // Initialize
-    loadProgress();
-    initializeStudySession();
+    loadProgress().then(() => {
+        initializeStudySession();
+    });
     
     // Force periodic updates of the stats display
     setInterval(function() {
@@ -888,8 +977,14 @@ async function updateAuthLink() {
 document.addEventListener('DOMContentLoaded', updateAuthLink);
 
 // Listen for auth state changes
-supabaseClient.auth.onAuthStateChange((event, session) => {
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
     updateAuthLink();
+    
+    // Reload progress when auth state changes
+    if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        await loadProgress();
+        initializeStudySession();
+    }
 });
 </script>
 {{ end }}
