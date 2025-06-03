@@ -1,7 +1,6 @@
 ---
 title: ""
 linkTitle: "reset"
-layout: reset
 type: docs
 toc_hide: True
 ---
