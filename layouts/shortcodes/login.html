@@ -257,21 +257,27 @@
 <script>
 // Wait for DOM and Supabase to be ready
 document.addEventListener('DOMContentLoaded', function() {
-  // Check if supabase is loaded
-  if (typeof supabase === 'undefined') {
-    console.error('Supabase library not loaded');
+  // Initialize Supabase client
+  let supabaseClient;
+  
+  try {
+    // Check if supabase is loaded
+    if (typeof supabase === 'undefined') {
+      throw new Error('Supabase library not loaded');
+    }
+
+    const { createClient } = supabase;
+    supabaseClient = createClient(
+      'https://qoihzqlsoangwhkepuen.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvaWh6cWxzb2FuZ3doa2VwdWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2NDA3MzUsImV4cCI6MjA2NDIxNjczNX0.uSH3zHSZ1QFrmVAq8erWGeOXyUk5zmDBcHhFddS--BA'
+    );
+
+    console.log("Supabase client initialized:", supabaseClient);
+  } catch (error) {
+    console.error('Failed to initialize Supabase:', error);
     showAlert('login-alert-container', 'Error: Authentication service not available', 'error');
     return;
   }
-
-  // Initialize Supabase client
-  const { createClient } = supabase;
-  const supabaseClient = createClient(
-    'https://qoihzqlsoangwhkepuen.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvaWh6cWxzb2FuZ3doa2VwdWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2NDA3MzUsImV4cCI6MjA2NDIxNjczNX0.uSH3zHSZ1QFrmVAq8erWGeOXyUk5zmDBcHhFddS--BA'
-  );
-
-  console.log("Supabase client initialized:", supabaseClient);
 
   // DOM elements
   const authMessage = document.getElementById('auth-message');
@@ -392,12 +398,26 @@ document.addEventListener('DOMContentLoaded', function() {
       
       const { data, error } = await supabaseClient.auth.signUp({
         email: email,
-        password: password
+        password: password,
+        options: {
+          emailRedirectTo: window.location.origin + '/login/'
+        }
       });
       
       if (error) {
         console.error('Signup error:', error);
-        showAlert('signup-alert-container', `Signup failed: ${error.message}`, 'error');
+        let errorMessage = error.message;
+        
+        // Provide more specific error messages
+        if (error.message.includes('User already registered')) {
+          errorMessage = 'An account with this email already exists. Please try logging in instead.';
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = 'Please enter a valid email address.';
+        } else if (error.message.includes('Password')) {
+          errorMessage = 'Password must be at least 6 characters long.';
+        }
+        
+        showAlert('signup-alert-container', `Signup failed: ${errorMessage}`, 'error');
         return;
       }
       
@@ -411,9 +431,11 @@ document.addEventListener('DOMContentLoaded', function() {
           const redirectUrl = document.referrer || '/';
           window.location.href = redirectUrl;
         }, 1500);
-      } else {
+      } else if (data.user && !data.session) {
         // Email confirmation required
         showAlert('signup-alert-container', 'Signup successful! Please check your email for confirmation.', 'success');
+      } else {
+        showAlert('signup-alert-container', 'Signup completed, but there was an issue. Please try logging in.', 'error');
       }
       
     } catch (err) {
@@ -442,16 +464,25 @@ document.addEventListener('DOMContentLoaded', function() {
       submitBtn.textContent = 'Sending...';
       
       const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/login/'
+        redirectTo: window.location.origin + '/password-reset/'
       });
       
       if (error) {
         console.error('Password reset error:', error);
-        showAlert('reset-alert-container', `Reset failed: ${error.message}`, 'error');
+        let errorMessage = error.message;
+        
+        // Provide more specific error messages
+        if (error.message.includes('User not found')) {
+          errorMessage = 'No account found with this email address.';
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = 'Please enter a valid email address.';
+        }
+        
+        showAlert('reset-alert-container', `Reset failed: ${errorMessage}`, 'error');
         return;
       }
       
-      showAlert('reset-alert-container', 'Password reset email sent! Check your inbox.', 'success');
+      showAlert('reset-alert-container', 'Password reset email sent! Check your inbox and follow the link to reset your password.', 'success');
       
       // Clear the form and go back to login after a delay
       setTimeout(() => {
