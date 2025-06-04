@@ -538,17 +538,18 @@ async function updateAuthLink() {
 }
 
 (function() {
-    // Flashcard data from Hugo
+    // Flashcard data from Hugo - with better validation
     const flashcards = [
         {{ range $indexPage.Params.lexicon }}
-        {{ if and .term .definition }}
+        {{ if and .term .definition (ne .term "") (ne .definition "") }}
         {
             term: {{ .term | jsonify }},
-            definition: {{ .definition | jsonify }}
+            definition: {{ .definition | jsonify }},
+            id: {{ printf "%s_%s" .term .definition | sha256 | jsonify }}
         },
         {{ end }}
         {{ end }}
-    ];
+    ].filter(card => card.term.trim() && card.definition.trim()); // Additional client-side validation
     
     // Card data structure for spaced repetition
     let cardData = {};
@@ -563,8 +564,9 @@ async function updateAuthLink() {
         hard: 0
     };
     
-    // Set ID based on parent page for database storage
-    const setId = `{{ $indexPage.RelPermalink }}`;
+    // Set ID based on parent page for database storage - ensure it's unique and clean
+    const setId = `{{ $indexPage.RelPermalink }}`.replace(/\/+$/, ''); // Remove trailing slashes
+    const setTitle = `{{ $indexPage.Title }}`;
     
     // DOM elements
     const flashcard = document.getElementById('flashcard');
@@ -587,16 +589,26 @@ async function updateAuthLink() {
     const easyCount = document.getElementById('easy-count');
     const reviewCount = document.getElementById('review-count');
     
-    // Load progress from Supabase database
+    // Load progress from Supabase database with enhanced error handling
     async function loadProgress() {
+        console.log(`Loading progress for set: ${setId} (${setTitle})`);
+        
         try {
             const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
             
-            if (sessionError || !session?.user) {
-                // Not logged in, use localStorage as fallback
+            if (sessionError) {
+                console.warn('Session error:', sessionError);
                 loadProgressFromLocalStorage();
                 return;
             }
+            
+            if (!session?.user) {
+                console.log('No authenticated user, using localStorage');
+                loadProgressFromLocalStorage();
+                return;
+            }
+            
+            console.log(`Loading progress for user ${session.user.id}, set ${setId}`);
             
             const { data, error } = await supabaseClient
                 .from('flashcard_progress')
@@ -606,7 +618,7 @@ async function updateAuthLink() {
                 .single();
             
             if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-                console.error('Error loading progress from database:', error);
+                console.error('Database error loading progress:', error);
                 console.error('Set ID:', setId);
                 console.error('User ID:', session.user.id);
                 loadProgressFromLocalStorage();
@@ -614,74 +626,166 @@ async function updateAuthLink() {
             }
             
             if (data) {
-                // Load from database
-                stats = data.stats || stats;
-                cardOrder = data.card_data?.cardOrder || cardOrder;
-                cardData = data.card_data?.cardData || {};
-                currentIndex = Math.min(data.card_data?.currentIndex || 0, cardOrder.length - 1);
-                studyMode = data.card_data?.studyMode || studyMode;
+                console.log('Progress loaded from database:', data);
+                // Validate and load from database
+                stats = validateStats(data.stats) || stats;
+                cardOrder = validateCardOrder(data.card_data?.cardOrder) || cardOrder;
+                cardData = validateCardData(data.card_data?.cardData) || {};
+                currentIndex = Math.min(Math.max(0, data.card_data?.currentIndex || 0), cardOrder.length - 1);
+                studyMode = validateStudyMode(data.card_data?.studyMode) || studyMode;
                 
                 // Set the radio button
                 const radio = document.querySelector(`input[value="${studyMode}"]`);
                 if (radio) radio.checked = true;
+                
+                // Migrate any localStorage data if it exists and is newer
+                await migrateLocalStorageIfNewer(data.updated_at);
             } else {
+                console.log('No database progress found, checking localStorage');
                 // No data in database, check localStorage for migration
                 loadProgressFromLocalStorage();
+                // If we loaded from localStorage and user is logged in, save to database
+                if (session?.user) {
+                    console.log('Migrating localStorage data to database');
+                    await saveProgress();
+                }
             }
         } catch (e) {
-            console.error("Error loading progress:", e);
+            console.error("Unexpected error loading progress:", e);
             console.error("Set ID:", setId);
-            console.error("Session check failed");
             loadProgressFromLocalStorage();
         }
         updateStatsDisplay();
     }
     
-    // Fallback function to load from localStorage
+    // Validation functions for data integrity
+    function validateStats(stats) {
+        if (!stats || typeof stats !== 'object') return null;
+        return {
+            reviewed: Math.max(0, parseInt(stats.reviewed) || 0),
+            easy: Math.max(0, parseInt(stats.easy) || 0),
+            medium: Math.max(0, parseInt(stats.medium) || 0),
+            hard: Math.max(0, parseInt(stats.hard) || 0)
+        };
+    }
+    
+    function validateCardOrder(order) {
+        if (!Array.isArray(order) || order.length !== flashcards.length) return null;
+        const validIndices = order.every(idx => Number.isInteger(idx) && idx >= 0 && idx < flashcards.length);
+        return validIndices ? order : null;
+    }
+    
+    function validateStudyMode(mode) {
+        return ['term-to-definition', 'definition-to-term'].includes(mode) ? mode : null;
+    }
+    
+    function validateCardData(data) {
+        if (!data || typeof data !== 'object') return null;
+        // Validate each card's data structure
+        const validatedData = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (value && typeof value === 'object' && 
+                typeof value.interval === 'number' && 
+                typeof value.easeFactor === 'number') {
+                validatedData[key] = value;
+            }
+        }
+        return validatedData;
+    }
+    
+    // Enhanced localStorage loading with validation
     function loadProgressFromLocalStorage() {
-        const storageKey = `flashcards_{{ $indexPage.RelPermalink }}`;
+        const storageKey = `flashcards_${setId}`;
         const saved = localStorage.getItem(storageKey);
+        console.log(`Loading from localStorage with key: ${storageKey}`);
+        
         if (saved) {
             try {
                 const data = JSON.parse(saved);
-                stats = data.stats || stats;
-                cardOrder = data.cardOrder || cardOrder;
-                cardData = data.cardData || {};
-                currentIndex = Math.min(data.currentIndex || 0, cardOrder.length - 1);
-                studyMode = data.studyMode || studyMode;
+                console.log('localStorage data found:', data);
+                
+                stats = validateStats(data.stats) || stats;
+                cardOrder = validateCardOrder(data.cardOrder) || cardOrder;
+                cardData = validateCardData(data.cardData) || {};
+                currentIndex = Math.min(Math.max(0, data.currentIndex || 0), cardOrder.length - 1);
+                studyMode = validateStudyMode(data.studyMode) || studyMode;
                 
                 // Set the radio button
                 const radio = document.querySelector(`input[value="${studyMode}"]`);
                 if (radio) radio.checked = true;
+                
+                console.log('Progress loaded from localStorage');
             } catch (e) {
-                console.error("Error loading progress from localStorage:", e);
+                console.error("Error parsing localStorage data:", e);
+                console.log("Resetting to defaults");
             }
+        } else {
+            console.log('No localStorage data found');
         }
     }
     
-    // Save progress to Supabase database
+    // Check if localStorage data is newer than database data
+    async function migrateLocalStorageIfNewer(dbUpdatedAt) {
+        const storageKey = `flashcards_${setId}`;
+        const saved = localStorage.getItem(storageKey);
+        
+        if (!saved) return;
+        
+        try {
+            const localData = JSON.parse(saved);
+            const localUpdated = new Date(localData.lastUpdated || 0);
+            const dbUpdated = new Date(dbUpdatedAt);
+            
+            if (localUpdated > dbUpdated) {
+                console.log('localStorage data is newer, migrating to database');
+                // Update current state with localStorage data
+                stats = validateStats(localData.stats) || stats;
+                cardOrder = validateCardOrder(localData.cardOrder) || cardOrder;
+                cardData = validateCardData(localData.cardData) || cardData;
+                currentIndex = Math.min(Math.max(0, localData.currentIndex || 0), cardOrder.length - 1);
+                studyMode = validateStudyMode(localData.studyMode) || studyMode;
+                
+                // Save to database
+                await saveProgress();
+            }
+        } catch (e) {
+            console.error("Error during localStorage migration:", e);
+        }
+    }
+    
+    // Save progress to Supabase database with enhanced error handling
     async function saveProgress() {
+        // Always save to localStorage as backup
+        saveProgressToLocalStorage();
+        
         try {
             const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
             
-            if (sessionError || !session?.user) {
-                // Not logged in, save to localStorage as fallback
-                saveProgressToLocalStorage();
+            if (sessionError) {
+                console.warn('Session error during save:', sessionError);
+                return;
+            }
+            
+            if (!session?.user) {
+                console.log('No authenticated user, progress saved to localStorage only');
                 return;
             }
             
             const progressData = {
                 user_id: session.user.id,
                 set_id: setId,
+                set_title: setTitle,
                 card_data: {
-                    cardOrder,
-                    currentIndex,
-                    studyMode,
-                    cardData
+                    cardOrder: validateCardOrder(cardOrder) || [...Array(flashcards.length).keys()],
+                    currentIndex: Math.min(Math.max(0, currentIndex), flashcards.length - 1),
+                    studyMode: validateStudyMode(studyMode) || 'term-to-definition',
+                    cardData: validateCardData(cardData) || {}
                 },
-                stats: stats,
+                stats: validateStats(stats) || { reviewed: 0, easy: 0, medium: 0, hard: 0 },
                 updated_at: new Date().toISOString()
             };
+            
+            console.log(`Saving progress for set: ${setId} (${setTitle})`);
             
             const { error } = await supabaseClient
                 .from('flashcard_progress')
@@ -690,44 +794,71 @@ async function updateAuthLink() {
                 });
             
             if (error) {
-                console.error('Error saving progress to database:', error);
+                console.error('Database error saving progress:', error);
                 console.error('Progress data that failed to save:', progressData);
-                // Fallback to localStorage
-                saveProgressToLocalStorage();
             } else {
-                console.log('Progress saved successfully to database');
+                console.log('Progress saved successfully to database for set:', setTitle);
             }
         } catch (e) {
-            console.error("Error saving progress:", e);
+            console.error("Unexpected error saving progress:", e);
             console.error("Set ID:", setId);
-            console.error("Progress data:", progressData);
-            saveProgressToLocalStorage();
         }
     }
     
-    // Fallback function to save to localStorage
+    // Enhanced localStorage saving with timestamp
     function saveProgressToLocalStorage() {
-        const storageKey = `flashcards_{{ $indexPage.RelPermalink }}`;
+        const storageKey = `flashcards_${setId}`;
         const data = {
-            stats,
-            cardOrder,
-            currentIndex,
-            studyMode,
-            cardData
+            stats: validateStats(stats) || { reviewed: 0, easy: 0, medium: 0, hard: 0 },
+            cardOrder: validateCardOrder(cardOrder) || [...Array(flashcards.length).keys()],
+            currentIndex: Math.min(Math.max(0, currentIndex), flashcards.length - 1),
+            studyMode: validateStudyMode(studyMode) || 'term-to-definition',
+            cardData: validateCardData(cardData) || {},
+            lastUpdated: new Date().toISOString(),
+            setTitle: setTitle
         };
-        localStorage.setItem(storageKey, JSON.stringify(data));
+        
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(data));
+            console.log(`Progress saved to localStorage for set: ${setTitle}`);
+        } catch (e) {
+            console.error("Error saving to localStorage:", e);
+        }
     }
     
-    // Update the current card display
+    // Enhanced card display with better error handling
     function updateCard() {
         if (flashcards.length === 0) {
             cardQuestion.textContent = "No flashcards available";
             cardQuestionBack.textContent = "No flashcards available";
             cardAnswer.textContent = "Please add lexicon data to the front matter";
+            console.warn(`No flashcards found for set: ${setTitle}`);
             return;
         }
         
+        // Ensure currentIndex is valid
+        if (currentIndex < 0 || currentIndex >= cardOrder.length) {
+            console.warn(`Invalid currentIndex ${currentIndex}, resetting to 0`);
+            currentIndex = 0;
+        }
+        
+        const cardIndex = cardOrder[currentIndex];
+        if (cardIndex < 0 || cardIndex >= flashcards.length) {
+            console.error(`Invalid card index ${cardIndex} in cardOrder`);
+            // Reset card order
+            cardOrder = [...Array(flashcards.length).keys()];
+            currentIndex = 0;
+        }
+        
         const card = flashcards[cardOrder[currentIndex]];
+        
+        if (!card || !card.term || !card.definition) {
+            console.error(`Invalid card data at index ${currentIndex}:`, card);
+            cardQuestion.textContent = "Error loading card";
+            cardQuestionBack.textContent = "Error loading card";
+            cardAnswer.textContent = "Please check the lexicon data";
+            return;
+        }
         
         // Set question and answer based on study mode
         let question, answer;
@@ -744,6 +875,7 @@ async function updateAuthLink() {
         cardAnswer.textContent = answer;
         
         currentCardSpan.textContent = currentIndex + 1;
+        totalCardsSpan.textContent = flashcards.length;
         
         // Update button states
         prevBtn.disabled = currentIndex === 0;
@@ -752,6 +884,8 @@ async function updateAuthLink() {
         // Reset flip state
         isFlipped = false;
         flashcard.classList.remove('flipped');
+        
+        console.log(`Displaying card ${currentIndex + 1}/${flashcards.length}: ${question} → ${answer}`);
     }
     
     // Update the stats display
