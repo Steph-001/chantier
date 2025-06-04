@@ -1,4 +1,7 @@
 
+-- Enable UUID extension if not already enabled
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Create flashcard_progress table
 CREATE TABLE IF NOT EXISTS public.flashcard_progress (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -7,7 +10,8 @@ CREATE TABLE IF NOT EXISTS public.flashcard_progress (
     card_data JSONB NOT NULL DEFAULT '{}'::jsonb,
     stats JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, set_id)
 );
 
 -- Add RLS (Row Level Security) policies

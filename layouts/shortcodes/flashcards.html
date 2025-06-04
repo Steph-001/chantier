@@ -607,6 +607,8 @@ async function updateAuthLink() {
             
             if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
                 console.error('Error loading progress from database:', error);
+                console.error('Set ID:', setId);
+                console.error('User ID:', session.user.id);
                 loadProgressFromLocalStorage();
                 return;
             }
@@ -628,6 +630,8 @@ async function updateAuthLink() {
             }
         } catch (e) {
             console.error("Error loading progress:", e);
+            console.error("Set ID:", setId);
+            console.error("Session check failed");
             loadProgressFromLocalStorage();
         }
         updateStatsDisplay();
@@ -682,16 +686,21 @@ async function updateAuthLink() {
             const { error } = await supabaseClient
                 .from('flashcard_progress')
                 .upsert(progressData, {
-                    onConflict: 'user_id,set_id'
+                    onConflict: ['user_id', 'set_id']
                 });
             
             if (error) {
                 console.error('Error saving progress to database:', error);
+                console.error('Progress data that failed to save:', progressData);
                 // Fallback to localStorage
                 saveProgressToLocalStorage();
+            } else {
+                console.log('Progress saved successfully to database');
             }
         } catch (e) {
             console.error("Error saving progress:", e);
+            console.error("Set ID:", setId);
+            console.error("Progress data:", progressData);
             saveProgressToLocalStorage();
         }
     }
@@ -979,11 +988,18 @@ document.addEventListener('DOMContentLoaded', updateAuthLink);
 // Listen for auth state changes
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
     updateAuthLink();
-    
+        
     // Reload progress when auth state changes
     if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        await loadProgress();
-        initializeStudySession();
+        // Wait for the functions to be available in scope
+        setTimeout(async () => {
+            if (typeof loadProgress === 'function') {
+                await loadProgress();
+                if (typeof initializeStudySession === 'function') {
+                    initializeStudySession();
+                }
+            }
+        }, 100);
     }
 });
 </script>
