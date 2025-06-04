@@ -29,7 +29,6 @@
             <div class="control-buttons">
                 <button id="shuffle-btn" class="btn btn-secondary">🔀 Shuffle</button>
                 <button id="reset-progress" class="btn btn-outline">🔄 Reset</button>
-                <button id="test-save" class="btn btn-outline">💾 Test Save</button>
             </div>
             <div class="progress-display">
                 <span id="current-card">1</span> / <span id="total-cards">{{ len $indexPage.Params.lexicon }}</span>
@@ -1110,14 +1109,6 @@ async function updateAuthLink() {
     shuffleBtn.addEventListener('click', shuffleCards);
     resetBtn.addEventListener('click', resetProgress);
     
-    const testSaveBtn = document.getElementById('test-save');
-    if (testSaveBtn) {
-        testSaveBtn.addEventListener('click', async () => {
-            console.log('Manual save test triggered');
-            await saveProgress();
-            await testDatabaseConnection();
-        });
-    }
     
     easyBtn.addEventListener('click', function() {
         markDifficulty('easy');
@@ -1208,8 +1199,6 @@ async function updateAuthLink() {
     // Initialize
     loadProgress().then(() => {
         initializeStudySession();
-        // Run database test after a short delay
-        setTimeout(testDatabaseConnection, 2000);
     });
     
     // Force periodic updates of the stats display
