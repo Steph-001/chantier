@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS public.flashcard_progress (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     set_id TEXT NOT NULL,
+    set_title TEXT,
     card_data JSONB NOT NULL DEFAULT '{}'::jsonb,
     stats JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

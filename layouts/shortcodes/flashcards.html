@@ -29,6 +29,7 @@
             <div class="control-buttons">
                 <button id="shuffle-btn" class="btn btn-secondary">🔀 Shuffle</button>
                 <button id="reset-progress" class="btn btn-outline">🔄 Reset</button>
+                <button id="test-save" class="btn btn-outline">💾 Test Save</button>
             </div>
             <div class="progress-display">
                 <span id="current-card">1</span> / <span id="total-cards">{{ len $indexPage.Params.lexicon }}</span>
@@ -785,23 +786,53 @@ async function updateAuthLink() {
                 updated_at: new Date().toISOString()
             };
             
-            console.log(`Saving progress for set: ${setId} (${setTitle})`);
+            console.log(`Attempting to save progress for user: ${session.user.id}`);
+            console.log(`Set ID: ${setId}`);
+            console.log(`Set Title: ${setTitle}`);
+            console.log('Progress data:', JSON.stringify(progressData, null, 2));
             
-            const { error } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('flashcard_progress')
                 .upsert(progressData, {
-                    onConflict: ['user_id', 'set_id']
+                    onConflict: 'user_id,set_id'
                 });
             
             if (error) {
                 console.error('Database error saving progress:', error);
+                console.error('Error code:', error.code);
+                console.error('Error message:', error.message);
+                console.error('Error details:', error.details);
+                console.error('Error hint:', error.hint);
                 console.error('Progress data that failed to save:', progressData);
+                
+                // Try a simpler insert to test basic connectivity
+                console.log('Attempting simple test insert...');
+                const testData = {
+                    user_id: session.user.id,
+                    set_id: `test_${Date.now()}`,
+                    set_title: 'Test Set',
+                    card_data: {},
+                    stats: { reviewed: 0, easy: 0, medium: 0, hard: 0 }
+                };
+                
+                const { data: testResult, error: testError } = await supabaseClient
+                    .from('flashcard_progress')
+                    .insert(testData);
+                    
+                if (testError) {
+                    console.error('Test insert also failed:', testError);
+                } else {
+                    console.log('Test insert succeeded:', testResult);
+                }
             } else {
                 console.log('Progress saved successfully to database for set:', setTitle);
+                console.log('Saved data result:', data);
             }
         } catch (e) {
             console.error("Unexpected error saving progress:", e);
+            console.error("Error stack:", e.stack);
             console.error("Set ID:", setId);
+            console.error("Set Title:", setTitle);
         }
     }
     
@@ -1085,6 +1116,15 @@ async function updateAuthLink() {
     shuffleBtn.addEventListener('click', shuffleCards);
     resetBtn.addEventListener('click', resetProgress);
     
+    const testSaveBtn = document.getElementById('test-save');
+    if (testSaveBtn) {
+        testSaveBtn.addEventListener('click', async () => {
+            console.log('Manual save test triggered');
+            await saveProgress();
+            await testDatabaseConnection();
+        });
+    }
+    
     easyBtn.addEventListener('click', function() {
         markDifficulty('easy');
     });
@@ -1103,9 +1143,79 @@ async function updateAuthLink() {
         });
     });
     
+    // Test database connectivity
+    async function testDatabaseConnection() {
+        try {
+            const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+            
+            if (sessionError) {
+                console.error('Session error during test:', sessionError);
+                return;
+            }
+            
+            if (!session?.user) {
+                console.log('No authenticated user for database test');
+                return;
+            }
+            
+            console.log('Testing database connection...');
+            console.log('User ID:', session.user.id);
+            console.log('User email:', session.user.email);
+            
+            // Test read access
+            const { data: readData, error: readError } = await supabaseClient
+                .from('flashcard_progress')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .limit(1);
+                
+            if (readError) {
+                console.error('Read test failed:', readError);
+            } else {
+                console.log('Read test successful. Found records:', readData?.length || 0);
+            }
+            
+            // Test write access with a simple record
+            const testRecord = {
+                user_id: session.user.id,
+                set_id: `connection_test_${Date.now()}`,
+                set_title: 'Connection Test',
+                card_data: { test: true },
+                stats: { reviewed: 0, easy: 0, medium: 0, hard: 0 }
+            };
+            
+            const { data: writeData, error: writeError } = await supabaseClient
+                .from('flashcard_progress')
+                .insert(testRecord);
+                
+            if (writeError) {
+                console.error('Write test failed:', writeError);
+                console.error('Write error details:', {
+                    code: writeError.code,
+                    message: writeError.message,
+                    details: writeError.details,
+                    hint: writeError.hint
+                });
+            } else {
+                console.log('Write test successful:', writeData);
+                
+                // Clean up test record
+                await supabaseClient
+                    .from('flashcard_progress')
+                    .delete()
+                    .eq('set_id', testRecord.set_id);
+            }
+            
+        } catch (e) {
+            console.error('Database test failed with exception:', e);
+        }
+    }
+
     // Initialize
     loadProgress().then(() => {
         initializeStudySession();
+        // Run database test after a short delay
+        setTimeout(testDatabaseConnection, 2000);
     });
     
     // Force periodic updates of the stats display
