@@ -566,8 +566,10 @@ async function updateAuthLink() {
     };
     
     // Set ID based on parent page for database storage - ensure it's unique and clean
-    const setId = `{{ $indexPage.RelPermalink }}`.replace(/\/+$/, ''); // Remove trailing slashes
+    const setId = `{{ $indexPage.RelPermalink }}`.replace(/\/+$/, '').replace(/^\//, ''); // Remove leading and trailing slashes
     const setTitle = `{{ $indexPage.Title }}`;
+    
+    console.log(`Initializing flashcards for set: "${setId}" (${setTitle})`);
     
     // DOM elements
     const flashcard = document.getElementById('flashcard');
@@ -592,7 +594,14 @@ async function updateAuthLink() {
     
     // Load progress from Supabase database with enhanced error handling
     async function loadProgress() {
-        console.log(`Loading progress for set: ${setId} (${setTitle})`);
+        console.log(`Loading progress for set: "${setId}" (${setTitle})`);
+        
+        // Reset to defaults first to ensure clean state
+        stats = { reviewed: 0, easy: 0, medium: 0, hard: 0 };
+        cardData = {};
+        cardOrder = [...Array(flashcards.length).keys()];
+        currentIndex = 0;
+        studyMode = 'term-to-definition';
         
         try {
             const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
@@ -609,7 +618,7 @@ async function updateAuthLink() {
                 return;
             }
             
-            console.log(`Loading progress for user ${session.user.id}, set ${setId}`);
+            console.log(`Loading progress for user ${session.user.id}, set "${setId}"`);
             
             const { data, error } = await supabaseClient
                 .from('flashcard_progress')
@@ -627,13 +636,13 @@ async function updateAuthLink() {
             }
             
             if (data) {
-                console.log('Progress loaded from database:', data);
+                console.log(`Progress loaded from database for set "${setId}":`, data);
                 // Validate and load from database
-                stats = validateStats(data.stats) || stats;
-                cardOrder = validateCardOrder(data.card_data?.cardOrder) || cardOrder;
+                stats = validateStats(data.stats) || { reviewed: 0, easy: 0, medium: 0, hard: 0 };
+                cardOrder = validateCardOrder(data.card_data?.cardOrder) || [...Array(flashcards.length).keys()];
                 cardData = validateCardData(data.card_data?.cardData) || {};
                 currentIndex = Math.min(Math.max(0, data.card_data?.currentIndex || 0), cardOrder.length - 1);
-                studyMode = validateStudyMode(data.card_data?.studyMode) || studyMode;
+                studyMode = validateStudyMode(data.card_data?.studyMode) || 'term-to-definition';
                 
                 // Set the radio button
                 const radio = document.querySelector(`input[value="${studyMode}"]`);
@@ -642,7 +651,7 @@ async function updateAuthLink() {
                 // Migrate any localStorage data if it exists and is newer
                 await migrateLocalStorageIfNewer(data.updated_at);
             } else {
-                console.log('No database progress found, checking localStorage');
+                console.log(`No database progress found for set "${setId}", checking localStorage`);
                 // No data in database, check localStorage for migration
                 loadProgressFromLocalStorage();
                 // If we loaded from localStorage and user is logged in, save to database
@@ -698,30 +707,36 @@ async function updateAuthLink() {
     function loadProgressFromLocalStorage() {
         const storageKey = `flashcards_${setId}`;
         const saved = localStorage.getItem(storageKey);
-        console.log(`Loading from localStorage with key: ${storageKey}`);
+        console.log(`Loading from localStorage with key: "${storageKey}"`);
         
         if (saved) {
             try {
                 const data = JSON.parse(saved);
-                console.log('localStorage data found:', data);
+                console.log(`localStorage data found for set "${setId}":`, data);
                 
-                stats = validateStats(data.stats) || stats;
-                cardOrder = validateCardOrder(data.cardOrder) || cardOrder;
+                stats = validateStats(data.stats) || { reviewed: 0, easy: 0, medium: 0, hard: 0 };
+                cardOrder = validateCardOrder(data.cardOrder) || [...Array(flashcards.length).keys()];
                 cardData = validateCardData(data.cardData) || {};
                 currentIndex = Math.min(Math.max(0, data.currentIndex || 0), cardOrder.length - 1);
-                studyMode = validateStudyMode(data.studyMode) || studyMode;
+                studyMode = validateStudyMode(data.studyMode) || 'term-to-definition';
                 
                 // Set the radio button
                 const radio = document.querySelector(`input[value="${studyMode}"]`);
                 if (radio) radio.checked = true;
                 
-                console.log('Progress loaded from localStorage');
+                console.log(`Progress loaded from localStorage for set "${setId}"`);
             } catch (e) {
                 console.error("Error parsing localStorage data:", e);
                 console.log("Resetting to defaults");
+                // Reset to defaults on error
+                stats = { reviewed: 0, easy: 0, medium: 0, hard: 0 };
+                cardData = {};
+                cardOrder = [...Array(flashcards.length).keys()];
+                currentIndex = 0;
+                studyMode = 'term-to-definition';
             }
         } else {
-            console.log('No localStorage data found');
+            console.log(`No localStorage data found for set "${setId}"`);
         }
     }
     
@@ -786,8 +801,7 @@ async function updateAuthLink() {
                 updated_at: new Date().toISOString()
             };
             
-            console.log(`Attempting to save progress for user: ${session.user.id}`);
-            console.log(`Set ID: ${setId}`);
+            console.log(`Attempting to save progress for user: ${session.user.id}, set: "${setId}"`);
             console.log(`Set Title: ${setTitle}`);
             console.log('Progress data:', JSON.stringify(progressData, null, 2));
             
@@ -804,28 +818,8 @@ async function updateAuthLink() {
                 console.error('Error details:', error.details);
                 console.error('Error hint:', error.hint);
                 console.error('Progress data that failed to save:', progressData);
-                
-                // Try a simpler insert to test basic connectivity
-                console.log('Attempting simple test insert...');
-                const testData = {
-                    user_id: session.user.id,
-                    set_id: `test_${Date.now()}`,
-                    set_title: 'Test Set',
-                    card_data: {},
-                    stats: { reviewed: 0, easy: 0, medium: 0, hard: 0 }
-                };
-                
-                const { data: testResult, error: testError } = await supabaseClient
-                    .from('flashcard_progress')
-                    .insert(testData);
-                    
-                if (testError) {
-                    console.error('Test insert also failed:', testError);
-                } else {
-                    console.log('Test insert succeeded:', testResult);
-                }
             } else {
-                console.log('Progress saved successfully to database for set:', setTitle);
+                console.log(`Progress saved successfully to database for set "${setId}" (${setTitle})`);
                 console.log('Saved data result:', data);
             }
         } catch (e) {
@@ -851,7 +845,7 @@ async function updateAuthLink() {
         
         try {
             localStorage.setItem(storageKey, JSON.stringify(data));
-            console.log(`Progress saved to localStorage for set: ${setTitle}`);
+            console.log(`Progress saved to localStorage for set "${setId}" (${setTitle})`);
         } catch (e) {
             console.error("Error saving to localStorage:", e);
         }
